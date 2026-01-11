@@ -1,11 +1,12 @@
 package cluster
 
 import (
-	"errors"
 	"time"
+
+	"github.com/neatflowcv/proxmoxer/internal/domain/common"
 )
 
-// ClusterStatus represents the health status of a cluster
+// ClusterStatus represents the health status of a cluster.
 type ClusterStatus string
 
 const (
@@ -15,7 +16,7 @@ const (
 	StatusUnknown   ClusterStatus = "unknown"
 )
 
-// Cluster represents a Proxmox cluster managed by the system
+// Cluster represents a Proxmox cluster managed by the system.
 type Cluster struct {
 	// Unique identifier for the cluster
 	ID string
@@ -39,7 +40,7 @@ type Cluster struct {
 	UpdatedAt time.Time
 }
 
-// NewCluster creates a new Cluster instance
+// NewCluster creates a new Cluster instance.
 func NewCluster(
 	id string,
 	name string,
@@ -48,57 +49,65 @@ func NewCluster(
 	password string,
 ) *Cluster {
 	now := time.Now()
+
 	return &Cluster{
-		ID:          id,
-		Name:        name,
-		APIEndpoint: apiEndpoint,
-		Username:    username,
-		Password:    password,
-		Status:      StatusUnknown,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:             id,
+		Name:           name,
+		APIEndpoint:    apiEndpoint,
+		Username:       username,
+		Password:       password,
+		Status:         StatusUnknown,
+		ProxmoxVersion: "",
+		NodeCount:      0,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 }
 
-// UpdateStatus updates the cluster status and timestamp
+// UpdateStatus updates the cluster status and timestamp.
 func (c *Cluster) UpdateStatus(status ClusterStatus) {
 	c.Status = status
 	c.UpdatedAt = time.Now()
 }
 
-// UpdateNodeCount updates the node count
+// UpdateNodeCount updates the node count.
 func (c *Cluster) UpdateNodeCount(count int) {
 	c.NodeCount = count
 	c.UpdatedAt = time.Now()
 }
 
-// UpdateProxmoxVersion updates the Proxmox version
+// UpdateProxmoxVersion updates the Proxmox version.
 func (c *Cluster) UpdateProxmoxVersion(version string) {
 	c.ProxmoxVersion = version
 	c.UpdatedAt = time.Now()
 }
 
-// IsHealthy returns true if the cluster is in a healthy state
+// IsHealthy returns true if the cluster is in a healthy state.
 func (c *Cluster) IsHealthy() bool {
 	return c.Status == StatusHealthy
 }
 
-// Validate performs basic validation on the cluster entity
+// Validate performs basic validation on the cluster entity.
 func (c *Cluster) Validate() error {
 	if c.ID == "" {
-		return errors.New("cluster id cannot be empty")
+		return common.ErrClusterIDEmpty
 	}
+
 	if c.Name == "" {
-		return errors.New("cluster name cannot be empty")
+		return common.ErrClusterNameEmpty
 	}
+
 	if c.APIEndpoint == "" {
-		return errors.New("api endpoint cannot be empty")
+		return common.ErrAPIEndpointEmpty
 	}
+
 	if c.Username == "" {
-		return errors.New("username cannot be empty")
+		return common.ErrUsernameEmpty
 	}
+
 	if c.Password == "" {
-		return errors.New("password cannot be empty")
+		return common.ErrPasswordEmpty
 	}
+
 	return nil
 }

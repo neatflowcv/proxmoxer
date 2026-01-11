@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -10,41 +11,48 @@ import (
 	"github.com/neatflowcv/proxmoxer/internal/domain/common"
 )
 
-// ResponseWriter wraps common response writing functionality
+// ResponseWriter wraps common response writing functionality.
 type ResponseWriter struct {
 	logger *log.Logger
 }
 
-// NewResponseWriter creates a new ResponseWriter
+// NewResponseWriter creates a new ResponseWriter.
 func NewResponseWriter(logger *log.Logger) *ResponseWriter {
 	return &ResponseWriter{logger: logger}
 }
 
-// WriteJSON writes a JSON response
-func (rw *ResponseWriter) WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) error {
+// WriteJSON writes a JSON response.
+func (rw *ResponseWriter) WriteJSON(w http.ResponseWriter, statusCode int, data any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	return json.NewEncoder(w).Encode(data)
+	err := json.NewEncoder(w).Encode(data)
+	if err != nil {
+		return fmt.Errorf("failed to encode response: %w", err)
+	}
+
+	return nil
 }
 
-// WriteError writes an error response
+// WriteError writes an error response.
 func (rw *ResponseWriter) WriteError(w http.ResponseWriter, statusCode int, message string, details ...string) error {
+	var detailsMap map[string]any
+	if len(details) > 0 {
+		detailsMap = map[string]any{
+			"details": details,
+		}
+	}
+
 	errResp := dto.ErrorResponse{
 		Code:    http.StatusText(statusCode),
 		Message: message,
-	}
-
-	if len(details) > 0 {
-		errResp.Details = map[string]interface{}{
-			"details": details,
-		}
+		Details: detailsMap,
 	}
 
 	return rw.WriteJSON(w, statusCode, errResp)
 }
 
-// HandleError handles different types of errors and writes appropriate responses
+// HandleError handles different types of errors and writes appropriate responses.
 func (rw *ResponseWriter) HandleError(w http.ResponseWriter, err error) {
 	if err == nil {
 		return
@@ -54,26 +62,31 @@ func (rw *ResponseWriter) HandleError(w http.ResponseWriter, err error) {
 	statusCode := http.StatusInternalServerError
 	message := "An internal error occurred"
 
-	if errors.Is(err, common.ErrClusterNotFound) {
+	switch {
+	case errors.Is(err, common.ErrClusterNotFound):
 		statusCode = http.StatusNotFound
 		message = "Cluster not found"
-	} else if errors.Is(err, common.ErrClusterAlreadyExists) {
+	case errors.Is(err, common.ErrClusterAlreadyExists):
 		statusCode = http.StatusConflict
 		message = "Cluster already exists"
-	} else if errors.Is(err, common.ErrInvalidClusterID) {
+	case errors.Is(err, common.ErrInvalidClusterID):
 		statusCode = http.StatusBadRequest
 		message = "Invalid cluster ID"
-	} else if errors.Is(err, common.ErrInvalidCredentials) {
+	case errors.Is(err, common.ErrInvalidCredentials):
 		statusCode = http.StatusUnauthorized
 		message = "Invalid credentials"
-	} else if errors.Is(err, common.ErrAuthenticationFailed) {
+	case errors.Is(err, common.ErrAuthenticationFailed):
 		statusCode = http.StatusUnauthorized
 		message = "Authentication failed"
-	} else if errors.Is(err, common.ErrProxmoxConnectionFailed) {
+	case errors.Is(err, common.ErrProxmoxConnectionFailed):
 		statusCode = http.StatusBadGateway
 		message = "Failed to connect to Proxmox"
 	}
 
 	rw.logger.Printf("[ERROR] Handling error: %v (status: %d)\n", err, statusCode)
-	rw.WriteError(w, statusCode, message)
+
+	writeErr := rw.WriteError(w, statusCode, message)
+	if writeErr != nil {
+		rw.logger.Printf("[ERROR] Failed to write error response: %v\n", writeErr)
+	}
 }

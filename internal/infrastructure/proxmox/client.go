@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/neatflowcv/proxmoxer/internal/domain/common"
 )
 
-// Client represents a Proxmox API client
+// Client represents a Proxmox API client.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -20,33 +22,99 @@ type Client struct {
 }
 
 // NewClient creates a new Proxmox API client
-// insecureSkipVerify should be true for self-signed certificates (testing/development only)
+// insecureSkipVerify should be true for self-signed certificates (testing/development only).
 func NewClient(baseURL string, timeout time.Duration, insecureSkipVerify bool) *Client {
+	const defaultTimeout = 30 * time.Second
 	if timeout == 0 {
-		timeout = 30 * time.Second
+		timeout = defaultTimeout
 	}
 
-	// Create TLS configuration
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: insecureSkipVerify,
-	}
-
-	// Create HTTP transport with TLS config
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
+	tlsConfig := createTLSConfig(insecureSkipVerify)
+	transport := createHTTPTransport(tlsConfig)
 
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout:   timeout,
-			Transport: transport,
+			Transport:     transport,
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       timeout,
 		},
 		timeout: timeout,
 	}
 }
 
-// AuthenticateResponse represents the response from Proxmox authentication
+// createTLSConfig creates a TLS configuration.
+// InsecureSkipVerify is intentional for self-signed certificates in development.
+func createTLSConfig(insecureSkipVerify bool) *tls.Config {
+	return &tls.Config{
+		Rand:                                nil,
+		Time:                                nil,
+		Certificates:                        nil,
+		NameToCertificate:                   nil,
+		GetCertificate:                      nil,
+		GetClientCertificate:                nil,
+		GetConfigForClient:                  nil,
+		VerifyPeerCertificate:               nil,
+		VerifyConnection:                    nil,
+		RootCAs:                             nil,
+		NextProtos:                          nil,
+		ServerName:                          "",
+		ClientAuth:                          0,
+		ClientCAs:                           nil,
+		InsecureSkipVerify:                  insecureSkipVerify, //nolint:gosec
+		CipherSuites:                        nil,
+		PreferServerCipherSuites:            false,
+		SessionTicketsDisabled:              false,
+		SessionTicketKey:                    [32]byte{},
+		ClientSessionCache:                  nil,
+		UnwrapSession:                       nil,
+		WrapSession:                         nil,
+		MinVersion:                          0,
+		MaxVersion:                          0,
+		CurvePreferences:                    nil,
+		DynamicRecordSizingDisabled:         false,
+		Renegotiation:                       0,
+		KeyLogWriter:                        nil,
+		EncryptedClientHelloConfigList:      nil,
+		EncryptedClientHelloRejectionVerify: nil,
+		GetEncryptedClientHelloKeys:         nil,
+		EncryptedClientHelloKeys:            nil,
+	}
+}
+
+// createHTTPTransport creates an HTTP transport with the given TLS configuration.
+func createHTTPTransport(tlsConfig *tls.Config) *http.Transport {
+	return &http.Transport{
+		Proxy:                  nil,
+		OnProxyConnectResponse: nil,
+		DialContext:            nil,
+		Dial:                   nil,
+		DialTLSContext:         nil,
+		DialTLS:                nil,
+		TLSClientConfig:        tlsConfig,
+		TLSHandshakeTimeout:    0,
+		DisableKeepAlives:      false,
+		DisableCompression:     false,
+		MaxIdleConns:           0,
+		MaxIdleConnsPerHost:    0,
+		MaxConnsPerHost:        0,
+		IdleConnTimeout:        0,
+		ResponseHeaderTimeout:  0,
+		ExpectContinueTimeout:  0,
+		TLSNextProto:           nil,
+		ProxyConnectHeader:     nil,
+		GetProxyConnectHeader:  nil,
+		MaxResponseHeaderBytes: 0,
+		WriteBufferSize:        0,
+		ReadBufferSize:         0,
+		ForceAttemptHTTP2:      false,
+		HTTP2:                  nil,
+		Protocols:              nil,
+	}
+}
+
+// AuthenticateResponse represents the response from Proxmox authentication.
 type AuthenticateResponse struct {
 	Data struct {
 		Ticket string `json:"ticket"`
@@ -55,7 +123,7 @@ type AuthenticateResponse struct {
 	RequestID string `json:"requestid"`
 }
 
-// GetNodesResponse represents the response from Proxmox nodes endpoint
+// GetNodesResponse represents the response from Proxmox nodes endpoint.
 type GetNodesResponse struct {
 	Data []struct {
 		Node   string `json:"node"`
@@ -64,7 +132,7 @@ type GetNodesResponse struct {
 	RequestID string `json:"requestid"`
 }
 
-// GetVersionResponse represents the response from Proxmox version endpoint
+// GetVersionResponse represents the response from Proxmox version endpoint.
 type GetVersionResponse struct {
 	Data struct {
 		Release string `json:"release"`
@@ -73,10 +141,10 @@ type GetVersionResponse struct {
 	RequestID string `json:"requestid"`
 }
 
-// Authenticate authenticates with the Proxmox API and returns ticket and CSRF token
-// This validates the credentials by attempting an actual API call
-func (c *Client) Authenticate(ctx context.Context, username string, password string) (ticket string, csrf string, err error) {
-	authURL := fmt.Sprintf("%s/api2/json/access/ticket", c.baseURL)
+// Authenticate authenticates with the Proxmox API and returns ticket and CSRF token.
+// This validates the credentials by attempting an actual API call.
+func (c *Client) Authenticate(ctx context.Context, username, password string) (string, string, error) {
+	authURL := c.baseURL + "/api2/json/access/ticket"
 
 	// Prepare form data
 	data := url.Values{}
@@ -84,7 +152,7 @@ func (c *Client) Authenticate(ctx context.Context, username string, password str
 	data.Set("password", password)
 
 	// Create request
-	req, err := http.NewRequestWithContext(ctx, "POST", authURL, bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create authentication request: %w", err)
 	}
@@ -96,7 +164,10 @@ func (c *Client) Authenticate(ctx context.Context, username string, password str
 	if err != nil {
 		return "", "", fmt.Errorf("authentication request failed: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
@@ -106,27 +177,31 @@ func (c *Client) Authenticate(ctx context.Context, username string, password str
 
 	// Check HTTP status
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("authentication failed with status %d: %s", resp.StatusCode, string(body))
+		return "", "", fmt.Errorf(
+			"authentication failed with status %d: %s: %w",
+			resp.StatusCode, string(body), common.ErrAuthenticationFailed)
 	}
 
 	// Parse response
 	var authResp AuthenticateResponse
-	if err := json.Unmarshal(body, &authResp); err != nil {
+
+	err = json.Unmarshal(body, &authResp)
+	if err != nil {
 		return "", "", fmt.Errorf("failed to parse authentication response: %w", err)
 	}
 
 	if authResp.Data.Ticket == "" {
-		return "", "", fmt.Errorf("no authentication ticket received")
+		return "", "", common.ErrNoAuthenticationTicket
 	}
 
 	return authResp.Data.Ticket, authResp.Data.CSRF, nil
 }
 
-// GetVersion retrieves the Proxmox version
-func (c *Client) GetVersion(ctx context.Context, ticket string) (version string, err error) {
-	versionURL := fmt.Sprintf("%s/api2/json/version", c.baseURL)
+// GetVersion retrieves the Proxmox version.
+func (c *Client) GetVersion(ctx context.Context, ticket string) (string, error) {
+	versionURL := c.baseURL + "/api2/json/version"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, versionURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create version request: %w", err)
 	}
@@ -137,7 +212,10 @@ func (c *Client) GetVersion(ctx context.Context, ticket string) (version string,
 	if err != nil {
 		return "", fmt.Errorf("version request failed: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -145,22 +223,24 @@ func (c *Client) GetVersion(ctx context.Context, ticket string) (version string,
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to get version with status %d", resp.StatusCode)
+		return "", fmt.Errorf("failed to get version with status %d: %w", resp.StatusCode, common.ErrProxmoxConnectionFailed)
 	}
 
 	var versionResp GetVersionResponse
-	if err := json.Unmarshal(body, &versionResp); err != nil {
+
+	err = json.Unmarshal(body, &versionResp)
+	if err != nil {
 		return "", fmt.Errorf("failed to parse version response: %w", err)
 	}
 
 	return versionResp.Data.Version, nil
 }
 
-// GetNodeCount retrieves the number of nodes in the cluster
-func (c *Client) GetNodeCount(ctx context.Context, ticket string) (count int, err error) {
-	nodesURL := fmt.Sprintf("%s/api2/json/nodes", c.baseURL)
+// GetNodeCount retrieves the number of nodes in the cluster.
+func (c *Client) GetNodeCount(ctx context.Context, ticket string) (int, error) {
+	nodesURL := c.baseURL + "/api2/json/nodes"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", nodesURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, nodesURL, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create nodes request: %w", err)
 	}
@@ -171,7 +251,10 @@ func (c *Client) GetNodeCount(ctx context.Context, ticket string) (count int, er
 	if err != nil {
 		return 0, fmt.Errorf("nodes request failed: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -179,18 +262,20 @@ func (c *Client) GetNodeCount(ctx context.Context, ticket string) (count int, er
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("failed to get nodes with status %d", resp.StatusCode)
+		return 0, fmt.Errorf("failed to get nodes with status %d: %w", resp.StatusCode, common.ErrProxmoxConnectionFailed)
 	}
 
 	var nodesResp GetNodesResponse
-	if err := json.Unmarshal(body, &nodesResp); err != nil {
+
+	err = json.Unmarshal(body, &nodesResp)
+	if err != nil {
 		return 0, fmt.Errorf("failed to parse nodes response: %w", err)
 	}
 
 	return len(nodesResp.Data), nil
 }
 
-// setAuthHeaders sets the authentication headers for API requests using Cookie-based authentication
+// setAuthHeaders sets the authentication headers for API requests using Cookie-based authentication.
 func (c *Client) setAuthHeaders(req *http.Request, ticket string) {
-	req.Header.Set("Cookie", fmt.Sprintf("PVEAuthCookie=%s", ticket))
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
 }

@@ -11,28 +11,31 @@ import (
 	"github.com/neatflowcv/proxmoxer/internal/infrastructure/proxmox"
 )
 
-// AppConfig holds the application configuration
+// AppConfig holds the application configuration.
 type AppConfig struct {
-	ServerPort      string
-	ProxmoxTimeout  time.Duration
-	Logger          *log.Logger
+	ServerPort     string
+	ProxmoxTimeout time.Duration
+	Logger         *log.Logger
 }
 
-// NewAppConfig creates default app configuration
+// NewAppConfig creates default app configuration.
 func NewAppConfig() *AppConfig {
+	const defaultProxmoxTimeout = 30 * time.Second
+
 	return &AppConfig{
 		ServerPort:     getEnv("SERVER_PORT", "8080"),
-		ProxmoxTimeout: 30 * time.Second,
+		ProxmoxTimeout: defaultProxmoxTimeout,
 		Logger:         log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile),
 	}
 }
 
-// InitializeApp initializes all application components
+// InitializeApp initializes all application components.
 func InitializeApp(config *AppConfig) (*http.Router, error) {
 	config.Logger.Println("Initializing application components...")
 
 	// Initialize repository (in-memory for MVP)
 	clusterRepo := persistence.NewMemoryRepository()
+
 	config.Logger.Println("✓ Cluster repository initialized (in-memory)")
 
 	// Initialize Proxmox client (will be initialized with actual URL per request)
@@ -43,6 +46,7 @@ func InitializeApp(config *AppConfig) (*http.Router, error) {
 
 	// Initialize services
 	clusterService := services.NewClusterService(clusterRepo, proxmoxClient, nil)
+
 	config.Logger.Println("✓ Cluster service initialized")
 
 	// Initialize router with all handlers
@@ -50,13 +54,15 @@ func InitializeApp(config *AppConfig) (*http.Router, error) {
 	config.Logger.Println("✓ HTTP router initialized")
 
 	config.Logger.Println("Application initialization completed successfully!")
+
 	return router, nil
 }
 
-// getEnv retrieves an environment variable or returns a default value
+// getEnv retrieves an environment variable or returns a default value.
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
+
 	return defaultValue
 }

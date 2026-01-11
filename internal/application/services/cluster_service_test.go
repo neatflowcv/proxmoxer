@@ -1,4 +1,4 @@
-package services
+package services_test
 
 import (
 	"context"
@@ -6,45 +6,57 @@ import (
 	"testing"
 
 	"github.com/neatflowcv/proxmoxer/internal/application/dto"
+	"github.com/neatflowcv/proxmoxer/internal/application/services"
 	"github.com/neatflowcv/proxmoxer/internal/domain/cluster"
 	"github.com/neatflowcv/proxmoxer/internal/domain/common"
 	"github.com/neatflowcv/proxmoxer/internal/infrastructure/persistence"
 )
 
-// mockProxmoxClient is a mock implementation of Proxmox client for testing
+// mockProxmoxClient is a mock implementation of Proxmox client for testing.
 type mockProxmoxClient struct {
-	authenticateFn func(ctx context.Context, username string, password string) (ticket string, csrf string, err error)
-	getVersionFn   func(ctx context.Context, ticket string) (version string, err error)
-	getNodeCountFn func(ctx context.Context, ticket string) (count int, err error)
+	authenticateFn func(ctx context.Context, username, password string) (
+		ticket, csrf string, err error)
+	getVersionFn   func(ctx context.Context, ticket string) (string, error)
+	getNodeCountFn func(ctx context.Context, ticket string) (int, error)
 }
 
-func (m *mockProxmoxClient) Authenticate(ctx context.Context, username string, password string) (ticket string, csrf string, err error) {
+func (m *mockProxmoxClient) Authenticate(ctx context.Context, username, password string) (
+	string, string, error) {
 	if m.authenticateFn != nil {
 		return m.authenticateFn(ctx, username, password)
 	}
+
 	return "test-ticket", "test-csrf", nil
 }
 
-func (m *mockProxmoxClient) GetVersion(ctx context.Context, ticket string) (version string, err error) {
+func (m *mockProxmoxClient) GetVersion(ctx context.Context, ticket string) (string, error) {
 	if m.getVersionFn != nil {
 		return m.getVersionFn(ctx, ticket)
 	}
+
 	return "7.4-1", nil
 }
 
-func (m *mockProxmoxClient) GetNodeCount(ctx context.Context, ticket string) (count int, err error) {
+func (m *mockProxmoxClient) GetNodeCount(ctx context.Context, ticket string) (int, error) {
 	if m.getNodeCountFn != nil {
 		return m.getNodeCountFn(ctx, ticket)
 	}
+
 	return 3, nil
 }
 
 func TestRegisterCluster_Success(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	req := &dto.RegisterClusterRequest{
 		Name:        "test-cluster",
@@ -76,11 +88,17 @@ func TestRegisterCluster_Success(t *testing.T) {
 }
 
 func TestRegisterCluster_DuplicateName(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	req := &dto.RegisterClusterRequest{
 		Name:        "test-cluster",
@@ -103,11 +121,17 @@ func TestRegisterCluster_DuplicateName(t *testing.T) {
 }
 
 func TestRegisterCluster_InvalidRequest(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	// Test with empty name
 	req := &dto.RegisterClusterRequest{
@@ -124,11 +148,17 @@ func TestRegisterCluster_InvalidRequest(t *testing.T) {
 }
 
 func TestListClusters(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	// Register multiple clusters
 	req1 := &dto.RegisterClusterRequest{
@@ -145,8 +175,8 @@ func TestListClusters(t *testing.T) {
 		Password:    "password",
 	}
 
-	service.RegisterCluster(ctx, req1)
-	service.RegisterCluster(ctx, req2)
+	_, _ = service.RegisterCluster(ctx, req1)
+	_, _ = service.RegisterCluster(ctx, req2)
 
 	// List clusters
 	response, err := service.ListClusters(ctx)
@@ -160,11 +190,17 @@ func TestListClusters(t *testing.T) {
 }
 
 func TestDeregisterCluster_Success(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	// Register a cluster
 	req := &dto.RegisterClusterRequest{
@@ -193,11 +229,17 @@ func TestDeregisterCluster_Success(t *testing.T) {
 }
 
 func TestDeregisterCluster_NotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	// Try to deregister non-existent cluster
 	err := service.DeregisterCluster(ctx, "non-existent-id")
@@ -207,11 +249,17 @@ func TestDeregisterCluster_NotFound(t *testing.T) {
 }
 
 func TestGetCluster(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
-	mockClient := &mockProxmoxClient{}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	mockClient := &mockProxmoxClient{
+		authenticateFn: nil,
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
+	}
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	// Register a cluster
 	req := &dto.RegisterClusterRequest{
@@ -242,15 +290,19 @@ func TestGetCluster(t *testing.T) {
 }
 
 func TestAuthenticationFailure(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	repo := persistence.NewMemoryRepository()
 	mockClient := &mockProxmoxClient{
-		authenticateFn: func(ctx context.Context, username string, password string) (ticket string, csrf string, err error) {
+		authenticateFn: func(ctx context.Context, username, password string) (string, string, error) {
 			return "", "", common.ErrAuthenticationFailed
 		},
+		getVersionFn:   nil,
+		getNodeCountFn: nil,
 	}
-	logger := NewSimpleLogger(log.Default())
-	service := NewClusterService(repo, mockClient, logger)
+	logger := services.NewSimpleLogger(log.Default())
+	service := services.NewClusterService(repo, mockClient, logger)
 
 	req := &dto.RegisterClusterRequest{
 		Name:        "test-cluster",

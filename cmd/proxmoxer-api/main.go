@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,31 +14,18 @@ import (
 )
 
 func main() {
-	// Initialize configuration
 	appConfig := config.NewAppConfig()
 
-	appConfig.Logger.Println("==============================================")
-	appConfig.Logger.Println("Proxmoxer API Server Starting")
-	appConfig.Logger.Println("==============================================")
-	appConfig.Logger.Printf("Version: 0.1.0-mvp\n")
-	appConfig.Logger.Printf("Server Port: %s\n", appConfig.ServerPort)
+	logStartup(appConfig)
 
-	// Initialize application components
 	router, err := config.InitializeApp(appConfig)
 	if err != nil {
 		appConfig.Logger.Fatalf("Failed to initialize application: %v", err)
 		os.Exit(1)
 	}
 
-	// Create HTTP server
-	addr := fmt.Sprintf(":%s", appConfig.ServerPort)
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           router,
-		ReadHeaderTimeout: appConfig.ProxmoxTimeout,
-		WriteTimeout:      appConfig.ProxmoxTimeout,
-		IdleTimeout:       30 * appConfig.ProxmoxTimeout,
-	}
+	addr := ":" + appConfig.ServerPort
+	server := createServer(appConfig, addr, router)
 
 	appConfig.Logger.Println("==============================================")
 	appConfig.Logger.Printf("Starting server on %s\n", addr)
@@ -48,7 +36,8 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		err := server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- fmt.Errorf("server error: %w", err)
 		}
 	}()
@@ -61,20 +50,57 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		appConfig.Logger.Fatalf("%v", err)
-		os.Exit(1)
+
+		return
 	case sig := <-sigChan:
 		appConfig.Logger.Printf("\nReceived signal: %v\n", sig)
 		appConfig.Logger.Println("Initiating graceful shutdown...")
 	}
 
-	// Create a context with 30-second timeout for graceful shutdown
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownServer(appConfig, server)
+}
+
+func logStartup(appConfig *config.AppConfig) {
+	appConfig.Logger.Println("==============================================")
+	appConfig.Logger.Println("Proxmoxer API Server Starting")
+	appConfig.Logger.Println("==============================================")
+	appConfig.Logger.Printf("Version: 0.1.0-mvp\n")
+	appConfig.Logger.Printf("Server Port: %s\n", appConfig.ServerPort)
+}
+
+func createServer(appConfig *config.AppConfig, addr string, router http.Handler) *http.Server {
+	const idleTimeoutMultiplier = 30
+
+	return &http.Server{
+		Addr:                         addr,
+		Handler:                      router,
+		DisableGeneralOptionsHandler: false,
+		TLSConfig:                    nil,
+		ReadTimeout:                  0,
+		ReadHeaderTimeout:            appConfig.ProxmoxTimeout,
+		WriteTimeout:                 appConfig.ProxmoxTimeout,
+		IdleTimeout:                  idleTimeoutMultiplier * appConfig.ProxmoxTimeout,
+		MaxHeaderBytes:               0,
+		TLSNextProto:                 nil,
+		ConnState:                    nil,
+		ErrorLog:                     nil,
+		BaseContext:                  nil,
+		ConnContext:                  nil,
+		HTTP2:                        nil,
+		Protocols:                    nil,
+	}
+}
+
+func shutdownServer(appConfig *config.AppConfig, server *http.Server) {
+	const shutdownTimeout = 30 * time.Second
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	// Gracefully shutdown the server
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	err := server.Shutdown(shutdownCtx)
+	if err != nil {
 		appConfig.Logger.Printf("Error during graceful shutdown: %v\n", err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // Defer cancel() not needed as os.Exit stops execution
 	}
 
 	appConfig.Logger.Println("Server shutdown completed successfully")

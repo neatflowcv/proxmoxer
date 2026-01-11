@@ -11,14 +11,14 @@ import (
 	"github.com/neatflowcv/proxmoxer/internal/application/services"
 )
 
-// ClusterHandler handles HTTP requests for cluster operations
+// ClusterHandler handles HTTP requests for cluster operations.
 type ClusterHandler struct {
 	clusterService *services.ClusterService
 	responseWriter *ResponseWriter
 	logger         *log.Logger
 }
 
-// NewClusterHandler creates a new ClusterHandler
+// NewClusterHandler creates a new ClusterHandler.
 func NewClusterHandler(
 	clusterService *services.ClusterService,
 	logger *log.Logger,
@@ -35,23 +35,36 @@ func NewClusterHandler(
 }
 
 // RegisterCluster handles POST /api/v1/clusters
-// Registers a new Proxmox cluster
+// Registers a new Proxmox cluster.
 func (h *ClusterHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
 	h.logger.Println("[Handler] Handling RegisterCluster request")
 
 	if r.Method != http.MethodPost {
-		h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		err := h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
 		return
 	}
 
 	// Parse request body
 	var req dto.RegisterClusterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		if err == io.EOF {
-			h.responseWriter.WriteError(w, http.StatusBadRequest, "Request body is required")
+
+	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr != nil {
+		var errMsg string
+		if decodeErr == io.EOF {
+			errMsg = "Request body is required"
 		} else {
-			h.responseWriter.WriteError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			errMsg = "Invalid request body: " + decodeErr.Error()
 		}
+
+		writeErr := h.responseWriter.WriteError(w, http.StatusBadRequest, errMsg)
+		if writeErr != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", writeErr)
+		}
+
 		return
 	}
 
@@ -60,20 +73,28 @@ func (h *ClusterHandler) RegisterCluster(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		h.logger.Printf("[Handler] RegisterCluster service error: %v\n", err)
 		h.responseWriter.HandleError(w, err)
+
 		return
 	}
 
 	// Write success response
-	h.responseWriter.WriteJSON(w, http.StatusCreated, response)
+	err = h.responseWriter.WriteJSON(w, http.StatusCreated, response)
+	if err != nil {
+		h.logger.Printf("[Handler] Failed to write success response: %v\n", err)
+	}
 }
 
 // ListClusters handles GET /api/v1/clusters
-// Lists all registered clusters
+// Lists all registered clusters.
 func (h *ClusterHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	h.logger.Println("[Handler] Handling ListClusters request")
 
 	if r.Method != http.MethodGet {
-		h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		err := h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
 		return
 	}
 
@@ -82,20 +103,28 @@ func (h *ClusterHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Printf("[Handler] ListClusters service error: %v\n", err)
 		h.responseWriter.HandleError(w, err)
+
 		return
 	}
 
 	// Write success response
-	h.responseWriter.WriteJSON(w, http.StatusOK, response)
+	err = h.responseWriter.WriteJSON(w, http.StatusOK, response)
+	if err != nil {
+		h.logger.Printf("[Handler] Failed to write success response: %v\n", err)
+	}
 }
 
 // GetCluster handles GET /api/v1/clusters/{id}
-// Gets a specific cluster by ID
+// Gets a specific cluster by ID.
 func (h *ClusterHandler) GetCluster(w http.ResponseWriter, r *http.Request) {
 	h.logger.Println("[Handler] Handling GetCluster request")
 
 	if r.Method != http.MethodGet {
-		h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		err := h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
 		return
 	}
 
@@ -104,7 +133,11 @@ func (h *ClusterHandler) GetCluster(w http.ResponseWriter, r *http.Request) {
 	clusterID := strings.TrimPrefix(r.URL.Path, "/api/v1/clusters/")
 
 	if clusterID == "" {
-		h.responseWriter.WriteError(w, http.StatusBadRequest, "Cluster ID is required")
+		err := h.responseWriter.WriteError(w, http.StatusBadRequest, "Cluster ID is required")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
 		return
 	}
 
@@ -113,20 +146,28 @@ func (h *ClusterHandler) GetCluster(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Printf("[Handler] GetCluster service error: %v\n", err)
 		h.responseWriter.HandleError(w, err)
+
 		return
 	}
 
 	// Write success response
-	h.responseWriter.WriteJSON(w, http.StatusOK, response)
+	err = h.responseWriter.WriteJSON(w, http.StatusOK, response)
+	if err != nil {
+		h.logger.Printf("[Handler] Failed to write success response: %v\n", err)
+	}
 }
 
 // DeregisterCluster handles DELETE /api/v1/clusters/{id}
-// Deregisters (removes) a cluster
+// Deregisters (removes) a cluster.
 func (h *ClusterHandler) DeregisterCluster(w http.ResponseWriter, r *http.Request) {
 	h.logger.Println("[Handler] Handling DeregisterCluster request")
 
 	if r.Method != http.MethodDelete {
-		h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		err := h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
 		return
 	}
 
@@ -134,7 +175,11 @@ func (h *ClusterHandler) DeregisterCluster(w http.ResponseWriter, r *http.Reques
 	clusterID := strings.TrimPrefix(r.URL.Path, "/api/v1/clusters/")
 
 	if clusterID == "" {
-		h.responseWriter.WriteError(w, http.StatusBadRequest, "Cluster ID is required")
+		err := h.responseWriter.WriteError(w, http.StatusBadRequest, "Cluster ID is required")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
 		return
 	}
 
@@ -143,6 +188,7 @@ func (h *ClusterHandler) DeregisterCluster(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		h.logger.Printf("[Handler] DeregisterCluster service error: %v\n", err)
 		h.responseWriter.HandleError(w, err)
+
 		return
 	}
 

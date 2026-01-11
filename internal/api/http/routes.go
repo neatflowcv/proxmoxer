@@ -8,14 +8,14 @@ import (
 	"github.com/neatflowcv/proxmoxer/internal/application/services"
 )
 
-// Router sets up HTTP routes for the API
+// Router sets up HTTP routes for the API.
 type Router struct {
-	mux             *http.ServeMux
-	clusterHandler  *handler.ClusterHandler
-	logger          *log.Logger
+	mux            *http.ServeMux
+	clusterHandler *handler.ClusterHandler
+	logger         *log.Logger
 }
 
-// NewRouter creates a new Router with all handlers
+// NewRouter creates a new Router with all handlers.
 func NewRouter(
 	clusterService *services.ClusterService,
 	logger *log.Logger,
@@ -25,16 +25,27 @@ func NewRouter(
 	}
 
 	router := &Router{
-		mux:             http.NewServeMux(),
-		clusterHandler:  handler.NewClusterHandler(clusterService, logger),
-		logger:          logger,
+		mux:            http.NewServeMux(),
+		clusterHandler: handler.NewClusterHandler(clusterService, logger),
+		logger:         logger,
 	}
 
 	router.setupRoutes()
+
 	return router
 }
 
-// setupRoutes registers all API routes
+// Mux returns the underlying HTTP multiplexer.
+func (r *Router) Mux() *http.ServeMux {
+	return r.mux
+}
+
+// ServeHTTP makes Router implement the http.Handler interface.
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.mux.ServeHTTP(w, req)
+}
+
+// setupRoutes registers all API routes.
 func (r *Router) setupRoutes() {
 	r.logger.Println("Setting up API routes")
 
@@ -52,21 +63,16 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("DELETE /api/v1/clusters/{id}", r.clusterHandler.DeregisterCluster)
 
 	// Health check endpoint
-	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	logger := r.logger
+	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy"}`))
+
+		_, err := w.Write([]byte(`{"status":"healthy"}`))
+		if err != nil {
+			logger.Printf("Failed to write health check response: %v\n", err)
+		}
 	})
 
 	r.logger.Println("API routes configured successfully")
-}
-
-// ServeHTTP makes Router implement the http.Handler interface
-func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.mux.ServeHTTP(w, req)
-}
-
-// Mux returns the underlying HTTP multiplexer
-func (r *Router) Mux() *http.ServeMux {
-	return r.mux
 }

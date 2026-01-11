@@ -16,20 +16,22 @@ type MemoryRepository struct {
 	clusters map[string]*cluster.Cluster
 }
 
-// NewMemoryRepository creates a new in-memory cluster repository
+// NewMemoryRepository creates a new in-memory cluster repository.
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
+		mu:       sync.RWMutex{},
 		clusters: make(map[string]*cluster.Cluster),
 	}
 }
 
-// Save creates or updates a cluster in memory
+// Save creates or updates a cluster in memory.
 func (r *MemoryRepository) Save(ctx context.Context, c *cluster.Cluster) error {
 	if c == nil {
-		return fmt.Errorf("cluster cannot be nil")
+		return common.ErrClusterNil
 	}
 
-	if err := c.Validate(); err != nil {
+	err := c.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid cluster: %w", err)
 	}
 
@@ -37,10 +39,11 @@ func (r *MemoryRepository) Save(ctx context.Context, c *cluster.Cluster) error {
 	defer r.mu.Unlock()
 
 	r.clusters[c.ID] = c
+
 	return nil
 }
 
-// FindByID retrieves a cluster by its ID
+// FindByID retrieves a cluster by its ID.
 func (r *MemoryRepository) FindByID(ctx context.Context, id string) (*cluster.Cluster, error) {
 	if id == "" {
 		return nil, fmt.Errorf("cluster id cannot be empty: %w", common.ErrInvalidClusterID)
@@ -57,10 +60,10 @@ func (r *MemoryRepository) FindByID(ctx context.Context, id string) (*cluster.Cl
 	return c, nil
 }
 
-// FindByName retrieves a cluster by its name
+// FindByName retrieves a cluster by its name.
 func (r *MemoryRepository) FindByName(ctx context.Context, name string) (*cluster.Cluster, error) {
 	if name == "" {
-		return nil, fmt.Errorf("cluster name cannot be empty")
+		return nil, common.ErrClusterNameEmpty
 	}
 
 	r.mu.RLock()
@@ -75,7 +78,7 @@ func (r *MemoryRepository) FindByName(ctx context.Context, name string) (*cluste
 	return nil, fmt.Errorf("cluster with name %s not found: %w", name, common.ErrClusterNotFound)
 }
 
-// List retrieves all registered clusters
+// List retrieves all registered clusters.
 func (r *MemoryRepository) List(ctx context.Context) ([]*cluster.Cluster, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -88,7 +91,7 @@ func (r *MemoryRepository) List(ctx context.Context) ([]*cluster.Cluster, error)
 	return clusters, nil
 }
 
-// Delete removes a cluster by its ID
+// Delete removes a cluster by its ID.
 func (r *MemoryRepository) Delete(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("cluster id cannot be empty: %w", common.ErrInvalidClusterID)
@@ -102,10 +105,11 @@ func (r *MemoryRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	delete(r.clusters, id)
+
 	return nil
 }
 
-// Exists checks if a cluster with the given ID exists
+// Exists checks if a cluster with the given ID exists.
 func (r *MemoryRepository) Exists(ctx context.Context, id string) (bool, error) {
 	if id == "" {
 		return false, nil
@@ -115,5 +119,6 @@ func (r *MemoryRepository) Exists(ctx context.Context, id string) (bool, error) 
 	defer r.mu.RUnlock()
 
 	_, ok := r.clusters[id]
+
 	return ok, nil
 }

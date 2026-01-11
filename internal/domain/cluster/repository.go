@@ -3,7 +3,7 @@ package cluster
 import "context"
 
 // Repository defines the interface for cluster persistence operations
-// Implementations should handle in-memory storage, databases, or other persistence mechanisms
+// Implementations should handle in-memory storage, databases, or other persistence mechanisms.
 type Repository interface {
 	// Save creates or updates a cluster
 	Save(ctx context.Context, cluster *Cluster) error

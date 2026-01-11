@@ -4,25 +4,25 @@ import (
 	"time"
 )
 
-// RegisterClusterRequest is the request DTO for registering a new cluster
+// RegisterClusterRequest is the request DTO for registering a new cluster.
 type RegisterClusterRequest struct {
 	// Human-readable name for the cluster
-	Name string `json:"name" binding:"required,max=255"`
+	Name string `binding:"required,max=255" json:"name"`
 	// Proxmox API endpoint URL (e.g., https://pve.example.com:8006)
-	APIEndpoint string `json:"api_endpoint" binding:"required,url"`
+	APIEndpoint string `binding:"required,url" json:"api_endpoint"`
 	// Proxmox username for authentication
-	Username string `json:"username" binding:"required,max=255"`
+	Username string `binding:"required,max=255" json:"username"`
 	// Proxmox password for authentication
-	Password string `json:"password" binding:"required,min=1"`
+	Password string `binding:"required,min=1" json:"password"`
 }
 
-// DeregisterClusterRequest is the request DTO for deregistering a cluster
+// DeregisterClusterRequest is the request DTO for deregistering a cluster.
 type DeregisterClusterRequest struct {
 	// Cluster ID to deregister
-	ClusterID string `json:"cluster_id" binding:"required"`
+	ClusterID string `binding:"required" json:"cluster_id"`
 }
 
-// ListClustersResponse is the response DTO for listing clusters
+// ListClustersResponse is the response DTO for listing clusters.
 type ListClustersResponse struct {
 	// List of clusters
 	Clusters []ClusterResponse `json:"clusters"`
@@ -30,7 +30,7 @@ type ListClustersResponse struct {
 	Total int `json:"total"`
 }
 
-// ClusterResponse is the response DTO for a single cluster
+// ClusterResponse is the response DTO for a single cluster.
 type ClusterResponse struct {
 	// Unique identifier
 	ID string `json:"id"`
@@ -50,12 +50,12 @@ type ClusterResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ErrorResponse is the standard error response DTO
+// ErrorResponse is the standard error response DTO.
 type ErrorResponse struct {
 	// Error code
 	Code string `json:"code"`
 	// Error message
 	Message string `json:"message"`
 	// Additional details
-	Details map[string]interface{} `json:"details,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }

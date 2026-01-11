@@ -1,15 +1,18 @@
-package persistence
+package persistence_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/neatflowcv/proxmoxer/internal/domain/cluster"
+	"github.com/neatflowcv/proxmoxer/internal/infrastructure/persistence"
 )
 
 func TestMemoryRepository_Save(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	repo := NewMemoryRepository()
+	repo := persistence.NewMemoryRepository()
 
 	c := cluster.NewCluster(
 		"test-id",
@@ -36,8 +39,10 @@ func TestMemoryRepository_Save(t *testing.T) {
 }
 
 func TestMemoryRepository_FindByID(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	repo := NewMemoryRepository()
+	repo := persistence.NewMemoryRepository()
 
 	// Try to find non-existent cluster
 	_, err := repo.FindByID(ctx, "non-existent")
@@ -53,7 +58,7 @@ func TestMemoryRepository_FindByID(t *testing.T) {
 		"root@pam",
 		"password",
 	)
-	repo.Save(ctx, c)
+	_ = repo.Save(ctx, c)
 
 	found, err := repo.FindByID(ctx, "test-id")
 	if err != nil {
@@ -66,8 +71,10 @@ func TestMemoryRepository_FindByID(t *testing.T) {
 }
 
 func TestMemoryRepository_FindByName(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	repo := NewMemoryRepository()
+	repo := persistence.NewMemoryRepository()
 
 	c := cluster.NewCluster(
 		"test-id",
@@ -76,7 +83,7 @@ func TestMemoryRepository_FindByName(t *testing.T) {
 		"root@pam",
 		"password",
 	)
-	repo.Save(ctx, c)
+	_ = repo.Save(ctx, c)
 
 	found, err := repo.FindByName(ctx, "test-cluster")
 	if err != nil {
@@ -89,8 +96,10 @@ func TestMemoryRepository_FindByName(t *testing.T) {
 }
 
 func TestMemoryRepository_List(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	repo := NewMemoryRepository()
+	repo := persistence.NewMemoryRepository()
 
 	// Save multiple clusters
 	for i := 1; i <= 3; i++ {
@@ -101,7 +110,7 @@ func TestMemoryRepository_List(t *testing.T) {
 			"root@pam",
 			"password",
 		)
-		repo.Save(ctx, c)
+		_ = repo.Save(ctx, c)
 	}
 
 	clusters, err := repo.List(ctx)
@@ -115,8 +124,10 @@ func TestMemoryRepository_List(t *testing.T) {
 }
 
 func TestMemoryRepository_Delete(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	repo := NewMemoryRepository()
+	repo := persistence.NewMemoryRepository()
 
 	c := cluster.NewCluster(
 		"test-id",
@@ -125,7 +136,7 @@ func TestMemoryRepository_Delete(t *testing.T) {
 		"root@pam",
 		"password",
 	)
-	repo.Save(ctx, c)
+	_ = repo.Save(ctx, c)
 
 	// Delete the cluster
 	err := repo.Delete(ctx, "test-id")
@@ -141,8 +152,10 @@ func TestMemoryRepository_Delete(t *testing.T) {
 }
 
 func TestMemoryRepository_Exists(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	repo := NewMemoryRepository()
+	repo := persistence.NewMemoryRepository()
 
 	c := cluster.NewCluster(
 		"test-id",
@@ -151,7 +164,7 @@ func TestMemoryRepository_Exists(t *testing.T) {
 		"root@pam",
 		"password",
 	)
-	repo.Save(ctx, c)
+	_ = repo.Save(ctx, c)
 
 	exists, err := repo.Exists(ctx, "test-id")
 	if err != nil {
