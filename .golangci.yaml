@@ -1,0 +1,10 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - revive
+    - depguard
+    - tagliatelle
+    - wsl # deprecated
+    - varnamelen
+    - prealloc
