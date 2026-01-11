@@ -1,6 +1,6 @@
 ---
 name: go-linter-fixer
-description: "Use this agent when you need to run golangci-lint and automatically fix the reported issues in Go code. This includes fixing linting errors, style violations, and code quality issues detected by the linter. Examples:\\n\\n<example>\\nContext: User has just finished implementing a feature and wants to ensure code quality before committing.\\nuser: \"I just finished the new cluster sync feature, please check and fix any linting issues\"\\nassistant: \"I'll use the go-linter-fixer agent to run the linter and fix any issues found.\"\\n<Task tool call to launch go-linter-fixer agent>\\n</example>\\n\\n<example>\\nContext: User explicitly asks to run the linter.\\nuser: \"Run make fix and fix the problems\"\\nassistant: \"I'll launch the go-linter-fixer agent to run golangci-lint and automatically fix the reported issues.\"\\n<Task tool call to launch go-linter-fixer agent>\\n</example>\\n\\n<example>\\nContext: After a significant code change, proactively ensuring code quality.\\nuser: \"Refactor the repository implementation to use the new caching layer\"\\nassistant: \"I've completed the refactoring. Now let me use the go-linter-fixer agent to ensure the code meets all linting standards.\"\\n<Task tool call to launch go-linter-fixer agent>\\n</example>"
+description: "Use this agent to run golangci-lint and automatically fix linting errors, style violations, and code quality issues."
 model: haiku
 color: blue
 ---
