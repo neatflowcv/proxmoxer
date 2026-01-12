@@ -195,3 +195,47 @@ func (h *ClusterHandler) DeregisterCluster(w http.ResponseWriter, r *http.Reques
 	// Write success response (204 No Content)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ListClusterDisks handles GET /api/v1/clusters/{id}/disks
+// Gets disk information for all nodes in a cluster.
+func (h *ClusterHandler) ListClusterDisks(w http.ResponseWriter, r *http.Request) {
+	h.logger.Println("[Handler] Handling ListClusterDisks request")
+
+	if r.Method != http.MethodGet {
+		err := h.responseWriter.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
+		return
+	}
+
+	// Extract cluster ID from URL path
+	// URL pattern: /api/v1/clusters/{id}/disks
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/clusters/")
+	clusterID := strings.TrimSuffix(path, "/disks")
+
+	if clusterID == "" {
+		err := h.responseWriter.WriteError(w, http.StatusBadRequest, "Cluster ID is required")
+		if err != nil {
+			h.logger.Printf("[Handler] Failed to write error response: %v\n", err)
+		}
+
+		return
+	}
+
+	// Call service
+	response, err := h.clusterService.ListClusterDisks(r.Context(), clusterID)
+	if err != nil {
+		h.logger.Printf("[Handler] ListClusterDisks service error: %v\n", err)
+		h.responseWriter.HandleError(w, err)
+
+		return
+	}
+
+	// Write success response
+	err = h.responseWriter.WriteJSON(w, http.StatusOK, response)
+	if err != nil {
+		h.logger.Printf("[Handler] Failed to write success response: %v\n", err)
+	}
+}

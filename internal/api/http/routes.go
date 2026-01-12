@@ -62,6 +62,9 @@ func (r *Router) setupRoutes() {
 	// DELETE /api/v1/clusters/{id} - Deregister a cluster
 	r.mux.HandleFunc("DELETE /api/v1/clusters/{id}", r.clusterHandler.DeregisterCluster)
 
+	// GET /api/v1/clusters/{id}/disks - Get disk information for all nodes in a cluster
+	r.mux.HandleFunc("GET /api/v1/clusters/{id}/disks", r.clusterHandler.ListClusterDisks)
+
 	// Health check endpoint
 	logger := r.logger
 	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, req *http.Request) {

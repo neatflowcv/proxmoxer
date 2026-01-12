@@ -10,6 +10,7 @@ import (
 	"github.com/neatflowcv/proxmoxer/internal/domain/cluster"
 	"github.com/neatflowcv/proxmoxer/internal/domain/common"
 	"github.com/neatflowcv/proxmoxer/internal/infrastructure/persistence"
+	"github.com/neatflowcv/proxmoxer/internal/infrastructure/proxmox"
 )
 
 // mockProxmoxClient is a mock implementation of Proxmox client for testing.
@@ -18,6 +19,8 @@ type mockProxmoxClient struct {
 		ticket, csrf string, err error)
 	getVersionFn   func(ctx context.Context, ticket string) (string, error)
 	getNodeCountFn func(ctx context.Context, ticket string) (int, error)
+	getNodesFn     func(ctx context.Context, ticket string) ([]proxmox.NodeInfo, error)
+	getNodeDisksFn func(ctx context.Context, ticket string, nodeName string) ([]proxmox.DiskInfo, error)
 }
 
 func (m *mockProxmoxClient) Authenticate(ctx context.Context, username, password string) (
@@ -45,6 +48,42 @@ func (m *mockProxmoxClient) GetNodeCount(ctx context.Context, ticket string) (in
 	return 3, nil
 }
 
+func (m *mockProxmoxClient) ListNodes(ctx context.Context, ticket string) ([]proxmox.NodeInfo, error) {
+	if m.getNodesFn != nil {
+		return m.getNodesFn(ctx, ticket)
+	}
+
+	return []proxmox.NodeInfo{
+		{Node: "pve1", Status: "online"},
+		{Node: "pve2", Status: "online"},
+	}, nil
+}
+
+func (m *mockProxmoxClient) ListNodeDisks(
+	ctx context.Context,
+	ticket string,
+	nodeName string,
+) ([]proxmox.DiskInfo, error) {
+	if m.getNodeDisksFn != nil {
+		return m.getNodeDisksFn(ctx, ticket, nodeName)
+	}
+
+	return []proxmox.DiskInfo{
+		{
+			DevPath: "/dev/sda",
+			Type:    "ssd",
+			Size:    1000204886016,
+			Model:   "Samsung SSD 870",
+			Serial:  "S5VUNG0N123456",
+			Vendor:  "ATA",
+			Wearout: float64(98),
+			Health:  "PASSED",
+			Used:    "LVM",
+			GPT:     0,
+		},
+	}, nil
+}
+
 // mockProxmoxClientFactory implements services.ProxmoxClientFactory for testing.
 type mockProxmoxClientFactory struct {
 	client services.ProxmoxClient
@@ -64,6 +103,8 @@ func TestRegisterCluster_Success(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -107,6 +148,8 @@ func TestRegisterCluster_DuplicateName(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -141,6 +184,8 @@ func TestRegisterCluster_InvalidRequest(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -169,6 +214,8 @@ func TestListClusters(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -212,6 +259,8 @@ func TestDeregisterCluster_Success(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -252,6 +301,8 @@ func TestDeregisterCluster_NotFound(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -273,6 +324,8 @@ func TestGetCluster(t *testing.T) {
 		authenticateFn: nil,
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())
@@ -317,6 +370,8 @@ func TestAuthenticationFailure(t *testing.T) {
 		},
 		getVersionFn:   nil,
 		getNodeCountFn: nil,
+		getNodesFn:     nil,
+		getNodeDisksFn: nil,
 	}
 	mockFactory := &mockProxmoxClientFactory{client: mockClient}
 	logger := services.NewSimpleLogger(log.Default())

@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/neatflowcv/proxmoxer/internal/application/dto"
 	"github.com/neatflowcv/proxmoxer/internal/domain/cluster"
 	"github.com/neatflowcv/proxmoxer/internal/domain/common"
+	"github.com/neatflowcv/proxmoxer/internal/infrastructure/proxmox"
+	"golang.org/x/sync/errgroup"
 )
 
 // Logger interface for dependency injection.
@@ -45,6 +48,8 @@ type ProxmoxClient interface {
 	Authenticate(ctx context.Context, username string, password string) (ticket string, csrf string, err error)
 	GetVersion(ctx context.Context, ticket string) (version string, err error)
 	GetNodeCount(ctx context.Context, ticket string) (count int, err error)
+	ListNodes(ctx context.Context, ticket string) ([]proxmox.NodeInfo, error)
+	ListNodeDisks(ctx context.Context, ticket string, nodeName string) ([]proxmox.DiskInfo, error)
 }
 
 // ProxmoxClientFactory defines the interface for creating new ProxmoxClient instances.
@@ -183,6 +188,134 @@ func (s *ClusterService) GetCluster(ctx context.Context, clusterID string) (*dto
 	}
 
 	return s.clusterToResponse(c), nil
+}
+
+// ListClusterDisks retrieves disk information for all nodes in a cluster.
+func (s *ClusterService) ListClusterDisks(ctx context.Context, clusterID string) (*dto.ClusterDisksResponse, error) {
+	if clusterID == "" {
+		return nil, fmt.Errorf("cluster id cannot be empty: %w", common.ErrInvalidClusterID)
+	}
+
+	// Get cluster from repository
+	c, err := s.clusterRepo.FindByID(ctx, clusterID)
+	if err != nil {
+		s.logger.Error("Cluster not found", "cluster_id", clusterID)
+
+		return nil, fmt.Errorf("cluster not found: %w", common.ErrClusterNotFound)
+	}
+
+	// Create Proxmox client and authenticate
+	proxmoxClient := s.proxmoxClientFactory.NewClient(c.APIEndpoint)
+
+	ticket, _, err := proxmoxClient.Authenticate(ctx, c.Username, c.Password)
+	if err != nil {
+		s.logger.Error("Proxmox authentication failed", "error", err.Error())
+
+		return nil, fmt.Errorf("authentication failed: %w", common.ErrAuthenticationFailed)
+	}
+
+	// Get list of nodes
+	nodes, err := proxmoxClient.ListNodes(ctx, ticket)
+	if err != nil {
+		s.logger.Error("Failed to get nodes", "error", err.Error())
+
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	// Fetch disks for all nodes in parallel
+	nodeDisks, totalDisks, err := s.fetchNodeDisksParallel(ctx, proxmoxClient, ticket, nodes)
+	if err != nil {
+		s.logger.Error("Error fetching disks", "error", err.Error())
+
+		return nil, fmt.Errorf("failed to fetch disks: %w", err)
+	}
+
+	s.logger.Info("Cluster disks retrieved successfully", "cluster_id", clusterID, "total_disks", totalDisks)
+
+	return &dto.ClusterDisksResponse{
+		ClusterID:   c.ID,
+		ClusterName: c.Name,
+		Nodes:       nodeDisks,
+		TotalDisks:  totalDisks,
+	}, nil
+}
+
+// fetchNodeDisksParallel fetches disk information for all nodes in parallel.
+func (s *ClusterService) fetchNodeDisksParallel(
+	ctx context.Context,
+	proxmoxClient ProxmoxClient,
+	ticket string,
+	nodes []proxmox.NodeInfo,
+) ([]dto.NodeDisksResponse, int, error) {
+	nodeDisks := make([]dto.NodeDisksResponse, len(nodes))
+
+	var totalDisks int
+
+	var mu sync.Mutex
+
+	// Get disks for each node in parallel
+	g, gctx := errgroup.WithContext(ctx)
+
+	for i, node := range nodes {
+		idx := i
+		n := node
+
+		g.Go(func() error {
+			nodeResponse := dto.NodeDisksResponse{
+				NodeName: n.Node,
+				Status:   n.Status,
+				Disks:    []dto.DiskResponse{},
+				Error:    "",
+			}
+
+			disks, diskErr := proxmoxClient.ListNodeDisks(gctx, ticket, n.Node)
+			if diskErr != nil {
+				s.logger.Warn("Failed to get disks for node", "node", n.Node, "error", diskErr.Error())
+				nodeResponse.Error = diskErr.Error()
+			} else {
+				for _, disk := range disks {
+					nodeResponse.Disks = append(nodeResponse.Disks, s.diskInfoToResponse(disk))
+				}
+			}
+
+			mu.Lock()
+
+			nodeDisks[idx] = nodeResponse
+			totalDisks += len(nodeResponse.Disks)
+
+			mu.Unlock()
+
+			return nil // Don't fail on individual node errors
+		})
+	}
+
+	// Wait for all goroutines to complete
+	err := g.Wait()
+	if err != nil {
+		return nil, 0, fmt.Errorf("error fetching node disks: %w", err)
+	}
+
+	return nodeDisks, totalDisks, nil
+}
+
+// diskInfoToResponse converts a proxmox DiskInfo to a DTO response.
+func (s *ClusterService) diskInfoToResponse(disk proxmox.DiskInfo) dto.DiskResponse {
+	wearout := -1
+	if w, ok := disk.Wearout.(float64); ok {
+		wearout = int(w)
+	}
+
+	return dto.DiskResponse{
+		Device:  disk.DevPath,
+		Type:    disk.Type,
+		Size:    disk.Size,
+		Model:   disk.Model,
+		Serial:  disk.Serial,
+		Vendor:  disk.Vendor,
+		Wearout: wearout,
+		Health:  disk.Health,
+		Used:    disk.Used,
+	}
 }
 
 // createClusterFromRequest creates a cluster entity by authenticating with Proxmox.

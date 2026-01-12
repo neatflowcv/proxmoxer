@@ -123,13 +123,35 @@ type AuthenticateResponse struct {
 	RequestID string `json:"requestid"`
 }
 
-// GetNodesResponse represents the response from Proxmox nodes endpoint.
-type GetNodesResponse struct {
-	Data []struct {
-		Node   string `json:"node"`
-		Status string `json:"status"`
-	} `json:"data"`
-	RequestID string `json:"requestid"`
+// NodeInfo represents basic node information.
+type NodeInfo struct {
+	Node   string `json:"node"`
+	Status string `json:"status"`
+}
+
+// ListNodesResponse represents the response from Proxmox nodes endpoint.
+type ListNodesResponse struct {
+	Data      []NodeInfo `json:"data"`
+	RequestID string     `json:"requestid"`
+}
+
+// DiskInfo represents disk information from Proxmox API.
+type DiskInfo struct {
+	DevPath string `json:"devpath"`
+	Type    string `json:"type"`
+	Size    int64  `json:"size"`
+	Model   string `json:"model"`
+	Serial  string `json:"serial"`
+	Vendor  string `json:"vendor"`
+	Wearout any    `json:"wearout"`
+	Health  string `json:"health"`
+	Used    string `json:"used"`
+	GPT     int    `json:"gpt"`
+}
+
+// ListDisksResponse represents the response from Proxmox disks endpoint.
+type ListDisksResponse struct {
+	Data []DiskInfo `json:"data"`
 }
 
 // GetVersionResponse represents the response from Proxmox version endpoint.
@@ -265,7 +287,7 @@ func (c *Client) GetNodeCount(ctx context.Context, ticket string) (int, error) {
 		return 0, fmt.Errorf("failed to get nodes with status %d: %w", resp.StatusCode, common.ErrProxmoxConnectionFailed)
 	}
 
-	var nodesResp GetNodesResponse
+	var nodesResp ListNodesResponse
 
 	err = json.Unmarshal(body, &nodesResp)
 	if err != nil {
@@ -273,6 +295,84 @@ func (c *Client) GetNodeCount(ctx context.Context, ticket string) (int, error) {
 	}
 
 	return len(nodesResp.Data), nil
+}
+
+// ListNodes retrieves the list of nodes in the cluster.
+func (c *Client) ListNodes(ctx context.Context, ticket string) ([]NodeInfo, error) {
+	nodesURL := c.baseURL + "/api2/json/nodes"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, nodesURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create nodes request: %w", err)
+	}
+
+	c.setAuthHeaders(req, ticket)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("nodes request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read nodes response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get nodes with status %d: %w", resp.StatusCode, common.ErrProxmoxConnectionFailed)
+	}
+
+	var nodesResp ListNodesResponse
+
+	err = json.Unmarshal(body, &nodesResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse nodes response: %w", err)
+	}
+
+	return nodesResp.Data, nil
+}
+
+// ListNodeDisks retrieves disk information for a specific node.
+func (c *Client) ListNodeDisks(ctx context.Context, ticket string, nodeName string) ([]DiskInfo, error) {
+	disksURL := fmt.Sprintf("%s/api2/json/nodes/%s/disks/list", c.baseURL, nodeName)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, disksURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create disks request: %w", err)
+	}
+
+	c.setAuthHeaders(req, ticket)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("disks request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read disks response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get disks with status %d: %w", resp.StatusCode, common.ErrDiskQueryFailed)
+	}
+
+	var disksResp ListDisksResponse
+
+	err = json.Unmarshal(body, &disksResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse disks response: %w", err)
+	}
+
+	return disksResp.Data, nil
 }
 
 // setAuthHeaders sets the authentication headers for API requests using Cookie-based authentication.

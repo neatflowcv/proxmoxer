@@ -25,4 +25,5 @@ var (
 	ErrPasswordEmpty           = errors.New("password cannot be empty")
 	ErrClusterNil              = errors.New("cluster cannot be nil")
 	ErrNoAuthenticationTicket  = errors.New("no authentication ticket received")
+	ErrDiskQueryFailed         = errors.New("failed to query disk information")
 )
