@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/neatflowcv/proxmoxer/internal/application/dto"
@@ -50,6 +51,8 @@ type ProxmoxClient interface {
 	GetNodeCount(ctx context.Context, ticket string) (count int, err error)
 	ListNodes(ctx context.Context, ticket string) ([]proxmox.NodeInfo, error)
 	ListNodeDisks(ctx context.Context, ticket string, nodeName string) ([]proxmox.DiskInfo, error)
+	GetNodeStatus(ctx context.Context, ticket string, nodeName string) (*proxmox.NodeStatusData, error)
+	GetClusterResources(ctx context.Context, ticket string) ([]proxmox.ClusterResource, error)
 }
 
 // ProxmoxClientFactory defines the interface for creating new ProxmoxClient instances.
@@ -393,6 +396,141 @@ func (s *ClusterService) validateRegisterRequest(req *dto.RegisterClusterRequest
 	}
 
 	return nil
+}
+
+// GetClusterStatus retrieves monitoring status for all nodes in a cluster.
+func (s *ClusterService) GetClusterStatus(ctx context.Context, clusterID string) (*dto.ClusterStatusResponse, error) {
+	if clusterID == "" {
+		return nil, fmt.Errorf("cluster id cannot be empty: %w", common.ErrInvalidClusterID)
+	}
+
+	// Get cluster from repository
+	c, err := s.clusterRepo.FindByID(ctx, clusterID)
+	if err != nil {
+		s.logger.Error("Cluster not found", "cluster_id", clusterID)
+
+		return nil, fmt.Errorf("cluster not found: %w", common.ErrClusterNotFound)
+	}
+
+	// Create Proxmox client and authenticate
+	proxmoxClient := s.proxmoxClientFactory.NewClient(c.APIEndpoint)
+
+	ticket, _, err := proxmoxClient.Authenticate(ctx, c.Username, c.Password)
+	if err != nil {
+		s.logger.Error("Proxmox authentication failed", "error", err.Error())
+
+		return nil, fmt.Errorf("authentication failed: %w", common.ErrAuthenticationFailed)
+	}
+
+	// Get list of nodes
+	nodes, err := proxmoxClient.ListNodes(ctx, ticket)
+	if err != nil {
+		s.logger.Error("Failed to get nodes", "error", err.Error())
+
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	// Get cluster resources for VM/container counts
+	resources, err := proxmoxClient.GetClusterResources(ctx, ticket)
+	if err != nil {
+		s.logger.Warn("Failed to get cluster resources", "error", err.Error())
+		resources = []proxmox.ClusterResource{}
+	}
+
+	// Fetch status for all nodes in parallel
+	nodeStatuses := s.fetchNodeStatusesParallel(ctx, proxmoxClient, ticket, nodes)
+
+	// Calculate resource summary
+	resourceSummary := s.calculateResourceSummary(resources)
+
+	s.logger.Info("Cluster status retrieved successfully", "cluster_id", clusterID)
+
+	return &dto.ClusterStatusResponse{
+		ClusterID:       c.ID,
+		ClusterName:     c.Name,
+		Nodes:           nodeStatuses,
+		ResourceSummary: resourceSummary,
+		FetchedAt:       time.Now(),
+	}, nil
+}
+
+// fetchNodeStatusesParallel fetches status for all nodes in parallel.
+func (s *ClusterService) fetchNodeStatusesParallel(
+	ctx context.Context,
+	proxmoxClient ProxmoxClient,
+	ticket string,
+	nodes []proxmox.NodeInfo,
+) []dto.NodeStatusResponse {
+	nodeStatuses := make([]dto.NodeStatusResponse, len(nodes))
+
+	var mu sync.Mutex
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	for i, node := range nodes {
+		idx := i
+		n := node
+
+		g.Go(func() error {
+			nodeResponse := dto.NodeStatusResponse{
+				NodeName: n.Node,
+				Status:   n.Status,
+				LoadAvg:  []float64{},
+			}
+
+			status, statusErr := proxmoxClient.GetNodeStatus(gctx, ticket, n.Node)
+			if statusErr != nil {
+				s.logger.Warn("Failed to get status for node", "node", n.Node, "error", statusErr.Error())
+				nodeResponse.Error = statusErr.Error()
+			} else {
+				nodeResponse.CPUUsage = status.CPU * 100
+				nodeResponse.MemoryUsed = status.Memory.Used
+				nodeResponse.MemoryTotal = status.Memory.Total
+				if status.Memory.Total > 0 {
+					nodeResponse.MemoryUsage = float64(status.Memory.Used) / float64(status.Memory.Total) * 100
+				}
+				nodeResponse.SwapUsed = status.Swap.Used
+				nodeResponse.SwapTotal = status.Swap.Total
+				if status.Swap.Total > 0 {
+					nodeResponse.SwapUsage = float64(status.Swap.Used) / float64(status.Swap.Total) * 100
+				}
+				nodeResponse.Uptime = status.Uptime
+				nodeResponse.LoadAvg = status.LoadAvg
+			}
+
+			mu.Lock()
+			nodeStatuses[idx] = nodeResponse
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	_ = g.Wait()
+
+	return nodeStatuses
+}
+
+// calculateResourceSummary calculates VM and container counts from cluster resources.
+func (s *ClusterService) calculateResourceSummary(resources []proxmox.ClusterResource) dto.ResourceSummary {
+	summary := dto.ResourceSummary{}
+
+	for _, r := range resources {
+		switch r.Type {
+		case "qemu":
+			summary.TotalVMs++
+			if r.Status == "running" {
+				summary.RunningVMs++
+			}
+		case "lxc":
+			summary.TotalContainers++
+			if r.Status == "running" {
+				summary.RunningContainers++
+			}
+		}
+	}
+
+	return summary
 }
 
 // clusterToResponse converts a domain cluster entity to a response DTO.

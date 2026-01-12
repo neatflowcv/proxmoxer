@@ -4,6 +4,7 @@ import type {
   ClusterResponse,
   ListClustersResponse,
   ClusterDisksResponse,
+  ClusterStatusResponse,
 } from './types'
 
 export async function listClusters(): Promise<ListClustersResponse> {
@@ -29,4 +30,8 @@ export async function deleteCluster(id: string): Promise<void> {
 
 export async function getClusterDisks(id: string): Promise<ClusterDisksResponse> {
   return request<ClusterDisksResponse>(`/api/v1/clusters/${id}/disks`)
+}
+
+export async function getClusterStatus(id: string): Promise<ClusterStatusResponse> {
+  return request<ClusterStatusResponse>(`/api/v1/clusters/${id}/status`)
 }

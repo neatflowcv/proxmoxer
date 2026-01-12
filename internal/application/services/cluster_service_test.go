@@ -15,12 +15,13 @@ import (
 
 // mockProxmoxClient is a mock implementation of Proxmox client for testing.
 type mockProxmoxClient struct {
-	authenticateFn func(ctx context.Context, username, password string) (
-		ticket, csrf string, err error)
-	getVersionFn   func(ctx context.Context, ticket string) (string, error)
-	getNodeCountFn func(ctx context.Context, ticket string) (int, error)
-	getNodesFn     func(ctx context.Context, ticket string) ([]proxmox.NodeInfo, error)
-	getNodeDisksFn func(ctx context.Context, ticket string, nodeName string) ([]proxmox.DiskInfo, error)
+	authenticateFn        func(ctx context.Context, username, password string) (ticket, csrf string, err error)
+	getVersionFn          func(ctx context.Context, ticket string) (string, error)
+	getNodeCountFn        func(ctx context.Context, ticket string) (int, error)
+	getNodesFn            func(ctx context.Context, ticket string) ([]proxmox.NodeInfo, error)
+	getNodeDisksFn        func(ctx context.Context, ticket string, nodeName string) ([]proxmox.DiskInfo, error)
+	getNodeStatusFn       func(ctx context.Context, ticket string, nodeName string) (*proxmox.NodeStatusData, error)
+	getClusterResourcesFn func(ctx context.Context, ticket string) ([]proxmox.ClusterResource, error)
 }
 
 func (m *mockProxmoxClient) Authenticate(ctx context.Context, username, password string) (
@@ -81,6 +82,47 @@ func (m *mockProxmoxClient) ListNodeDisks(
 			Used:    "LVM",
 			GPT:     0,
 		},
+	}, nil
+}
+
+func (m *mockProxmoxClient) GetNodeStatus(
+	ctx context.Context,
+	ticket string,
+	nodeName string,
+) (*proxmox.NodeStatusData, error) {
+	if m.getNodeStatusFn != nil {
+		return m.getNodeStatusFn(ctx, ticket, nodeName)
+	}
+
+	return &proxmox.NodeStatusData{
+		CPU: 0.25,
+		Memory: proxmox.MemoryStatus{
+			Used:  8589934592,
+			Total: 17179869184,
+			Free:  8589934592,
+		},
+		Swap: proxmox.SwapStatus{
+			Used:  0,
+			Total: 4294967296,
+			Free:  4294967296,
+		},
+		Uptime:  86400,
+		LoadAvg: []float64{0.5, 0.7, 0.9},
+	}, nil
+}
+
+func (m *mockProxmoxClient) GetClusterResources(
+	ctx context.Context,
+	ticket string,
+) ([]proxmox.ClusterResource, error) {
+	if m.getClusterResourcesFn != nil {
+		return m.getClusterResourcesFn(ctx, ticket)
+	}
+
+	return []proxmox.ClusterResource{
+		{ID: "qemu/100", Node: "pve1", Type: "qemu", Status: "running"},
+		{ID: "qemu/101", Node: "pve1", Type: "qemu", Status: "stopped"},
+		{ID: "lxc/200", Node: "pve2", Type: "lxc", Status: "running"},
 	}, nil
 }
 

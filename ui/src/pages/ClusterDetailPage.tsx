@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useCluster, useClusterDisks } from '../hooks'
 import { deleteCluster } from '../api'
-import { ClusterStatusBadge, DiskTable } from '../components/cluster'
+import { ClusterStatusBadge, DiskTable, ClusterMonitoringSection } from '../components/cluster'
 import { Button, Card, CardBody, CardHeader, Spinner, Modal } from '../components/common'
 
 export default function ClusterDetailPage() {
@@ -100,6 +100,8 @@ export default function ClusterDetailPage() {
           </dl>
         </CardBody>
       </Card>
+
+      <ClusterMonitoringSection clusterId={id!} />
 
       <Card>
         <CardHeader>

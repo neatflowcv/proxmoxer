@@ -163,6 +163,69 @@ type GetVersionResponse struct {
 	RequestID string `json:"requestid"`
 }
 
+// NodeStatusData represents the status data of a single node.
+type NodeStatusData struct {
+	CPU     float64 `json:"cpu"`
+	Memory  MemoryStatus
+	Swap    SwapStatus
+	Uptime  int64     `json:"uptime"`
+	LoadAvg []float64 `json:"loadavg"`
+}
+
+// MemoryStatus represents memory information.
+type MemoryStatus struct {
+	Used  int64 `json:"used"`
+	Total int64 `json:"total"`
+	Free  int64 `json:"free"`
+}
+
+// SwapStatus represents swap information.
+type SwapStatus struct {
+	Used  int64 `json:"used"`
+	Total int64 `json:"total"`
+	Free  int64 `json:"free"`
+}
+
+// nodeStatusAPIResponse represents the raw API response for node status.
+type nodeStatusAPIResponse struct {
+	Data struct {
+		CPU     float64 `json:"cpu"`
+		Memory  struct {
+			Used  int64 `json:"used"`
+			Total int64 `json:"total"`
+			Free  int64 `json:"free"`
+		} `json:"memory"`
+		Swap struct {
+			Used  int64 `json:"used"`
+			Total int64 `json:"total"`
+			Free  int64 `json:"free"`
+		} `json:"swap"`
+		Uptime  int64     `json:"uptime"`
+		LoadAvg []float64 `json:"loadavg"`
+	} `json:"data"`
+}
+
+// ClusterResource represents a resource from the cluster resources endpoint.
+type ClusterResource struct {
+	ID      string  `json:"id"`
+	Node    string  `json:"node"`
+	Type    string  `json:"type"`
+	Status  string  `json:"status"`
+	CPU     float64 `json:"cpu"`
+	MaxCPU  int     `json:"maxcpu"`
+	Mem     int64   `json:"mem"`
+	MaxMem  int64   `json:"maxmem"`
+	Disk    int64   `json:"disk"`
+	MaxDisk int64   `json:"maxdisk"`
+	Uptime  int64   `json:"uptime"`
+	Name    string  `json:"name"`
+}
+
+// clusterResourcesResponse represents the response from cluster resources endpoint.
+type clusterResourcesResponse struct {
+	Data []ClusterResource `json:"data"`
+}
+
 // Authenticate authenticates with the Proxmox API and returns ticket and CSRF token.
 // This validates the credentials by attempting an actual API call.
 func (c *Client) Authenticate(ctx context.Context, username, password string) (string, string, error) {
@@ -378,4 +441,98 @@ func (c *Client) ListNodeDisks(ctx context.Context, ticket string, nodeName stri
 // setAuthHeaders sets the authentication headers for API requests using Cookie-based authentication.
 func (c *Client) setAuthHeaders(req *http.Request, ticket string) {
 	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+}
+
+// GetNodeStatus retrieves status information for a specific node.
+func (c *Client) GetNodeStatus(ctx context.Context, ticket string, nodeName string) (*NodeStatusData, error) {
+	statusURL := fmt.Sprintf("%s/api2/json/nodes/%s/status", c.baseURL, nodeName)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create node status request: %w", err)
+	}
+
+	c.setAuthHeaders(req, ticket)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("node status request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read node status response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"failed to get node status with status %d: %w", resp.StatusCode, common.ErrProxmoxConnectionFailed)
+	}
+
+	var statusResp nodeStatusAPIResponse
+
+	err = json.Unmarshal(body, &statusResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse node status response: %w", err)
+	}
+
+	return &NodeStatusData{
+		CPU: statusResp.Data.CPU,
+		Memory: MemoryStatus{
+			Used:  statusResp.Data.Memory.Used,
+			Total: statusResp.Data.Memory.Total,
+			Free:  statusResp.Data.Memory.Free,
+		},
+		Swap: SwapStatus{
+			Used:  statusResp.Data.Swap.Used,
+			Total: statusResp.Data.Swap.Total,
+			Free:  statusResp.Data.Swap.Free,
+		},
+		Uptime:  statusResp.Data.Uptime,
+		LoadAvg: statusResp.Data.LoadAvg,
+	}, nil
+}
+
+// GetClusterResources retrieves all cluster resources (nodes, VMs, containers, storage).
+func (c *Client) GetClusterResources(ctx context.Context, ticket string) ([]ClusterResource, error) {
+	resourcesURL := c.baseURL + "/api2/json/cluster/resources"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resourcesURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cluster resources request: %w", err)
+	}
+
+	c.setAuthHeaders(req, ticket)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("cluster resources request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cluster resources response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"failed to get cluster resources with status %d: %w", resp.StatusCode, common.ErrProxmoxConnectionFailed)
+	}
+
+	var resourcesResp clusterResourcesResponse
+
+	err = json.Unmarshal(body, &resourcesResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cluster resources response: %w", err)
+	}
+
+	return resourcesResp.Data, nil
 }

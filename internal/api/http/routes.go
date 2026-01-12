@@ -66,6 +66,9 @@ func (r *Router) setupRoutes() {
 	// GET /api/v1/clusters/{id}/disks - Get disk information for all nodes in a cluster
 	r.mux.HandleFunc("GET /api/v1/clusters/{id}/disks", r.clusterHandler.ListClusterDisks)
 
+	// GET /api/v1/clusters/{id}/status - Get monitoring status for all nodes in a cluster
+	r.mux.HandleFunc("GET /api/v1/clusters/{id}/status", r.clusterHandler.GetClusterStatus)
+
 	// Health check endpoint
 	logger := r.logger
 	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, req *http.Request) {
