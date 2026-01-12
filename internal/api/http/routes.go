@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/neatflowcv/proxmoxer/internal/api/http/handler"
+	"github.com/neatflowcv/proxmoxer/internal/api/http/middleware"
 	"github.com/neatflowcv/proxmoxer/internal/application/services"
 )
 
@@ -42,7 +43,7 @@ func (r *Router) Mux() *http.ServeMux {
 
 // ServeHTTP makes Router implement the http.Handler interface.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.mux.ServeHTTP(w, req)
+	middleware.CORS(r.mux).ServeHTTP(w, req)
 }
 
 // setupRoutes registers all API routes.
