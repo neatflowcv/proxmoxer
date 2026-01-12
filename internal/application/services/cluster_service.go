@@ -47,17 +47,22 @@ type ProxmoxClient interface {
 	GetNodeCount(ctx context.Context, ticket string) (count int, err error)
 }
 
+// ProxmoxClientFactory defines the interface for creating new ProxmoxClient instances.
+type ProxmoxClientFactory interface {
+	NewClient(baseURL string) ProxmoxClient
+}
+
 // ClusterService handles cluster-related use cases.
 type ClusterService struct {
-	clusterRepo   cluster.Repository
-	proxmoxClient ProxmoxClient
-	logger        Logger
+	clusterRepo         cluster.Repository
+	proxmoxClientFactory ProxmoxClientFactory
+	logger              Logger
 }
 
 // NewClusterService creates a new ClusterService instance.
 func NewClusterService(
 	repo cluster.Repository,
-	client ProxmoxClient,
+	clientFactory ProxmoxClientFactory,
 	logger Logger,
 ) *ClusterService {
 	if logger == nil {
@@ -65,9 +70,9 @@ func NewClusterService(
 	}
 
 	return &ClusterService{
-		clusterRepo:   repo,
-		proxmoxClient: client,
-		logger:        logger,
+		clusterRepo:          repo,
+		proxmoxClientFactory: clientFactory,
+		logger:               logger,
 	}
 }
 
@@ -183,8 +188,11 @@ func (s *ClusterService) GetCluster(ctx context.Context, clusterID string) (*dto
 // createClusterFromRequest creates a cluster entity by authenticating with Proxmox.
 func (s *ClusterService) createClusterFromRequest(ctx context.Context,
 	req *dto.RegisterClusterRequest) (*cluster.Cluster, error) {
+	// Create client using factory with the endpoint from the request
+	proxmoxClient := s.proxmoxClientFactory.NewClient(req.APIEndpoint)
+
 	// Authenticate with Proxmox API to validate credentials
-	ticket, _, err := s.proxmoxClient.Authenticate(ctx, req.Username, req.Password)
+	ticket, _, err := proxmoxClient.Authenticate(ctx, req.Username, req.Password)
 	if err != nil {
 		s.logger.Error("Proxmox authentication failed", "error", err.Error())
 
@@ -192,7 +200,7 @@ func (s *ClusterService) createClusterFromRequest(ctx context.Context,
 	}
 
 	// Get cluster version
-	version, err := s.proxmoxClient.GetVersion(ctx, ticket)
+	version, err := proxmoxClient.GetVersion(ctx, ticket)
 	if err != nil {
 		s.logger.Error("Failed to get Proxmox version", "error", err.Error())
 
@@ -200,7 +208,7 @@ func (s *ClusterService) createClusterFromRequest(ctx context.Context,
 	}
 
 	// Get node count
-	nodeCount, err := s.proxmoxClient.GetNodeCount(ctx, ticket)
+	nodeCount, err := proxmoxClient.GetNodeCount(ctx, ticket)
 	if err != nil {
 		s.logger.Error("Failed to get node count", "error", err.Error())
 

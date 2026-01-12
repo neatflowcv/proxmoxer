@@ -11,6 +11,17 @@ import (
 	"github.com/neatflowcv/proxmoxer/internal/infrastructure/proxmox"
 )
 
+// proxmoxClientFactory implements services.ProxmoxClientFactory.
+type proxmoxClientFactory struct {
+	timeout            time.Duration
+	insecureSkipVerify bool
+}
+
+//nolint:ireturn // Factory pattern requires returning interface for dependency injection and testability
+func (f *proxmoxClientFactory) NewClient(baseURL string) services.ProxmoxClient {
+	return proxmox.NewClient(baseURL, f.timeout, f.insecureSkipVerify)
+}
+
 // AppConfig holds the application configuration.
 type AppConfig struct {
 	ServerPort     string
@@ -38,14 +49,17 @@ func InitializeApp(config *AppConfig) (*http.Router, error) {
 
 	config.Logger.Println("✓ Cluster repository initialized (in-memory)")
 
-	// Initialize Proxmox client (will be initialized with actual URL per request)
-	// For now, we create a dummy client - the actual endpoint comes from the request
+	// Create Proxmox client factory
+	// The factory creates a new client for each endpoint dynamically
 	// insecureSkipVerify=true to support self-signed certificates
-	proxmoxClient := proxmox.NewClient("https://pve.local", config.ProxmoxTimeout, true)
-	config.Logger.Println("✓ Proxmox client initialized")
+	clientFactory := &proxmoxClientFactory{
+		timeout:            config.ProxmoxTimeout,
+		insecureSkipVerify: true,
+	}
+	config.Logger.Println("✓ Proxmox client factory initialized")
 
 	// Initialize services
-	clusterService := services.NewClusterService(clusterRepo, proxmoxClient, nil)
+	clusterService := services.NewClusterService(clusterRepo, clientFactory, nil)
 
 	config.Logger.Println("✓ Cluster service initialized")
 
